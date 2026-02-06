@@ -195,7 +195,9 @@ HTML_TEMPLATE = """\
 
 
 def _inline_markdown(text):
-    """Convert inline markdown markers to HTML (bold and italic)."""
+    """Convert inline markdown markers to HTML (bold, italic, links)."""
+    # [text](url)  →  <a href="url">text</a>  (processed first to protect link text from bold/italic)
+    text = re.sub(r'\[([^\]]+)\]\((https?://[^)]+)\)', r'<a href="\2">\1</a>', text)
     # ***bold italic***  →  <strong><em>…</em></strong>
     text = re.sub(r'\*\*\*(.+?)\*\*\*', r'<strong><em>\1</em></strong>', text)
     # **bold** or __bold__  →  <strong>

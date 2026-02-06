@@ -18,12 +18,23 @@ Note (macOS / Homebrew):
 """
 
 import argparse
+import os
+import platform
 import re
 import sys
+
+# macOS / Homebrew: help weasyprint find native libs and silence GLib warnings
+if platform.system() == "Darwin":
+    _brew_lib = "/opt/homebrew/lib"
+    if os.path.isdir(_brew_lib):
+        os.environ.setdefault("DYLD_FALLBACK_LIBRARY_PATH", _brew_lib)
+    os.environ.setdefault("G_DEBUG", "fatal-criticals=0")
+    os.environ.setdefault("GLIB_LOG_LEVEL", "0")
 
 # ---------------------------------------------------------------------------
 # Step 1: Parse markdown into blocks
 # ---------------------------------------------------------------------------
+
 
 def parse_markdown(text):
     """Parse markdown text into a list of blocks.
@@ -212,11 +223,23 @@ def generate_html(fr_blocks, es_blocks):
 # Step 4: Convert HTML → PDF
 # ---------------------------------------------------------------------------
 
+def _mute_stderr():
+    """Redirect C-level stderr to /dev/null (silences GLib warnings).
+
+    Does NOT restore stderr — GLib also emits warnings at process exit,
+    so we keep it muted for the lifetime of the process.
+    """
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, sys.stderr.fileno())
+    os.close(devnull)
+
+
 def html_to_pdf(html_string, output_path):
     """Write HTML to PDF using weasyprint."""
+    _mute_stderr()
     from weasyprint import HTML
-
     HTML(string=html_string).write_pdf(output_path)
+    # Use stdout — stderr is permanently muted after weasyprint
     print(f"PDF written to: {output_path}")
 
 

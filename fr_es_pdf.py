@@ -194,10 +194,23 @@ HTML_TEMPLATE = """\
 """
 
 
+def _inline_markdown(text):
+    """Convert inline markdown markers to HTML (bold and italic)."""
+    # ***bold italic***  →  <strong><em>…</em></strong>
+    text = re.sub(r'\*\*\*(.+?)\*\*\*', r'<strong><em>\1</em></strong>', text)
+    # **bold** or __bold__  →  <strong>
+    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+    text = re.sub(r'__(.+?)__', r'<strong>\1</strong>', text)
+    # *italic* or _italic_  →  <em>
+    text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+    text = re.sub(r'(?<!\w)_(.+?)_(?!\w)', r'<em>\1</em>', text)
+    return text
+
+
 def _html_cell(block):
     """Render a single block as an HTML fragment."""
     tag = block["type"] if block["type"] in ("h1", "h2") else "p"
-    return f"<{tag}>{block['text']}</{tag}>"
+    return f"<{tag}>{_inline_markdown(block['text'])}</{tag}>"
 
 
 def generate_html(left_blocks, right_blocks, left_label="Fran\u00e7ais", right_label="Espa\u00f1ol"):

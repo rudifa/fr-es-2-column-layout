@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Convert a French markdown document to a 2-column (French / Spanish) PDF.
+Convert a markdown document to a 2-column bilingual (FR/ES) PDF.
 
 Usage:
-    python fr_es_pdf.py sample.md                        # auto-translate with Google
+    python fr_es_pdf.py sample.md                        # FR→ES (default)
+    python fr_es_pdf.py sample.md --direction es-fr      # ES→FR
     python fr_es_pdf.py sample.md --translation es.md    # use pre-translated file
-    python fr_es_pdf.py sample.md --stub                 # use [ES] stub (for dev)
+    python fr_es_pdf.py sample.md --stub                 # use stub (for dev)
     python fr_es_pdf.py sample.md -o output.pdf          # specify output filename
     python fr_es_pdf.py sample.md --html-only            # write HTML for debugging
 
@@ -84,23 +85,24 @@ def parse_markdown(text):
 # Step 2: Translate blocks
 # ---------------------------------------------------------------------------
 
-def translate_stub(blocks):
+def translate_stub(blocks, target_lang="es"):
     """Return blocks with stub translations (for development)."""
+    label = target_lang.upper()
     translated = []
     for b in blocks:
-        translated.append({**b, "text": f"[ES] {b['text']}"})
+        translated.append({**b, "text": f"[{label}] {b['text']}"})
     return translated
 
 
-def translate_with_google(blocks):
+def translate_with_google(blocks, source="fr", target="es"):
     """Translate blocks using deep-translator (Google Translate)."""
     from deep_translator import GoogleTranslator
 
-    translator = GoogleTranslator(source="fr", target="es")
+    translator = GoogleTranslator(source=source, target=target)
     translated = []
     for b in blocks:
-        es_text = translator.translate(b["text"])
-        translated.append({**b, "text": es_text})
+        translated_text = translator.translate(b["text"])
+        translated.append({**b, "text": translated_text})
     return translated
 
 
@@ -140,11 +142,11 @@ HTML_TEMPLATE = """\
     width: 50%;
   }}
   /* thin vertical separator */
-  td.fr {{
+  td.left {{
     border-right: 0.5pt solid #ccc;
     padding-right: 12pt;
   }}
-  td.es {{
+  td.right {{
     padding-left: 12pt;
   }}
   tr {{
@@ -181,7 +183,7 @@ HTML_TEMPLATE = """\
 <body>
 <table>
   <thead>
-    <tr><th>Fran\u00e7ais</th><th>Espa\u00f1ol</th></tr>
+    <tr><th>{left_label}</th><th>{right_label}</th></tr>
   </thead>
   <tbody>
 {rows}
@@ -198,25 +200,29 @@ def _html_cell(block):
     return f"<{tag}>{block['text']}</{tag}>"
 
 
-def generate_html(fr_blocks, es_blocks):
+def generate_html(left_blocks, right_blocks, left_label="Fran\u00e7ais", right_label="Espa\u00f1ol"):
     """Build a full HTML document with a 2-column table."""
-    if len(fr_blocks) != len(es_blocks):
+    if len(left_blocks) != len(right_blocks):
         print(
-            f"Warning: block count mismatch (FR={len(fr_blocks)}, ES={len(es_blocks)}). "
+            f"Warning: block count mismatch (left={len(left_blocks)}, right={len(right_blocks)}). "
             "Padding shorter side with empty cells.",
             file=sys.stderr,
         )
 
     rows_html = []
-    n = max(len(fr_blocks), len(es_blocks))
+    n = max(len(left_blocks), len(right_blocks))
     for i in range(n):
-        fr_cell = _html_cell(fr_blocks[i]) if i < len(fr_blocks) else ""
-        es_cell = _html_cell(es_blocks[i]) if i < len(es_blocks) else ""
+        left_cell = _html_cell(left_blocks[i]) if i < len(left_blocks) else ""
+        right_cell = _html_cell(right_blocks[i]) if i < len(right_blocks) else ""
         rows_html.append(
-            f'    <tr><td class="fr">{fr_cell}</td><td class="es">{es_cell}</td></tr>'
+            f'    <tr><td class="left">{left_cell}</td><td class="right">{right_cell}</td></tr>'
         )
 
-    return HTML_TEMPLATE.format(rows="\n".join(rows_html))
+    return HTML_TEMPLATE.format(
+        rows="\n".join(rows_html),
+        left_label=left_label,
+        right_label=right_label,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -247,22 +253,29 @@ def html_to_pdf(html_string, output_path):
 # Step 5: CLI
 # ---------------------------------------------------------------------------
 
+LANG_LABELS = {"fr": "Fran\u00e7ais", "es": "Espa\u00f1ol"}
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert French markdown to a 2-column FR/ES PDF."
+        description="Convert markdown to a 2-column bilingual FR/ES PDF."
     )
-    parser.add_argument("input", help="Path to the French markdown file")
+    parser.add_argument("input", help="Path to the source markdown file")
     parser.add_argument(
         "-o", "--output", default=None,
         help="Output PDF path (default: <input>.pdf)",
     )
     parser.add_argument(
+        "--direction", choices=["fr-es", "es-fr"], default="fr-es",
+        help="Translation direction (default: fr-es)",
+    )
+    parser.add_argument(
         "--translation",
-        help="Path to a pre-translated Spanish markdown file",
+        help="Path to a pre-translated markdown file",
     )
     parser.add_argument(
         "--stub", action="store_true",
-        help="Use [ES] stub translations (for development/testing)",
+        help="Use stub translations (for development/testing)",
     )
     parser.add_argument(
         "--html-only", action="store_true",
@@ -271,20 +284,27 @@ def main():
 
     args = parser.parse_args()
 
+    source_lang, target_lang = args.direction.split("-")
+
     # -- read & parse source --
     with open(args.input, encoding="utf-8") as f:
-        fr_blocks = parse_markdown(f.read())
+        source_blocks = parse_markdown(f.read())
 
     # -- translate --
     if args.translation:
-        es_blocks = load_translated_file(args.translation)
+        target_blocks = load_translated_file(args.translation)
     elif args.stub:
-        es_blocks = translate_stub(fr_blocks)
+        target_blocks = translate_stub(source_blocks, target_lang=target_lang)
     else:
-        es_blocks = translate_with_google(fr_blocks)
+        target_blocks = translate_with_google(source_blocks, source=source_lang, target=target_lang)
 
     # -- generate HTML --
-    html = generate_html(fr_blocks, es_blocks)
+    html = generate_html(
+        source_blocks,
+        target_blocks,
+        left_label=LANG_LABELS[source_lang],
+        right_label=LANG_LABELS[target_lang],
+    )
 
     # -- output --
     if args.output:

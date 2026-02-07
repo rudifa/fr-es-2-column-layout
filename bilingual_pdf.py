@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """
-Convert a markdown document to a 2-column bilingual (FR/ES) PDF.
+Convert a markdown document to a 2-column bilingual PDF.
 
 Usage:
-    python fr_es_pdf.py sample.md                        # FR→ES (default)
-    python fr_es_pdf.py sample.md --direction es-fr      # ES→FR
-    python fr_es_pdf.py sample.md --translation es.md    # use pre-translated file
-    python fr_es_pdf.py sample.md --stub                 # use stub (for dev)
-    python fr_es_pdf.py sample.md -o output.pdf          # specify output filename
-    python fr_es_pdf.py sample.md --html-only            # write HTML for debugging
+    python bilingual_pdf.py sample.md                          # FR→ES (default)
+    python bilingual_pdf.py sample.md --source es --target fr  # ES→FR
+    python bilingual_pdf.py sample.md --source en --target de  # EN→DE
+    python bilingual_pdf.py sample.md --translation es.md      # use pre-translated file
+    python bilingual_pdf.py sample.md -o output.pdf            # specify output filename
+    # default output: sample.fr.es.pdf
+    python bilingual_pdf.py sample.md --html-only              # write HTML for debugging
 
 Prerequisites:
     pip install weasyprint deep-translator markdown
 
 Note (macOS / Homebrew):
     If weasyprint fails to find gobject/pango, run with:
-        DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib python fr_es_pdf.py ...
+        DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib python bilingual_pdf.py ...
 """
 
 import argparse
@@ -85,13 +86,27 @@ def parse_markdown(text):
 # Step 2: Translate blocks
 # ---------------------------------------------------------------------------
 
-def translate_stub(blocks, target_lang="es"):
-    """Return blocks with stub translations (for development)."""
-    label = target_lang.upper()
-    translated = []
-    for b in blocks:
-        translated.append({**b, "text": f"[{label}] {b['text']}"})
-    return translated
+def _validate_lang_codes(source, target):
+    """Check that source and target language codes are supported by Google Translate."""
+    from deep_translator import GoogleTranslator
+
+    supported = GoogleTranslator().get_supported_languages(as_dict=True)
+    # supported is {name: code}, build a set of valid codes
+    valid_codes = set(supported.values())
+
+    bad = []
+    if source not in valid_codes:
+        bad.append(source)
+    if target not in valid_codes:
+        bad.append(target)
+
+    if bad:
+        print(
+            f"Error: unsupported language code(s): {', '.join(bad)}", file=sys.stderr)
+        print(f"\nSupported languages:", file=sys.stderr)
+        for name, code in sorted(supported.items()):
+            print(f"  {code:<6} {name}", file=sys.stderr)
+        sys.exit(1)
 
 
 def translate_with_google(blocks, source="fr", target="es"):
@@ -106,6 +121,20 @@ def translate_with_google(blocks, source="fr", target="es"):
     return translated
 
 
+def blocks_to_markdown(blocks):
+    """Convert a list of blocks back to markdown text."""
+    lines = []
+    for b in blocks:
+        if b["type"] == "h1":
+            lines.append(f"# {b['text']}")
+        elif b["type"] == "h2":
+            lines.append(f"## {b['text']}")
+        else:
+            lines.append(b["text"])
+        lines.append("")
+    return "\n".join(lines)
+
+
 def load_translated_file(path):
     """Load a pre-translated markdown file and parse it into blocks."""
     with open(path, encoding="utf-8") as f:
@@ -118,7 +147,7 @@ def load_translated_file(path):
 
 HTML_TEMPLATE = """\
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{source_lang}">
 <head>
 <meta charset="utf-8">
 <style>
@@ -197,7 +226,8 @@ HTML_TEMPLATE = """\
 def _inline_markdown(text):
     """Convert inline markdown markers to HTML (bold, italic, links)."""
     # [text](url)  →  <a href="url">text</a>  (processed first to protect link text from bold/italic)
-    text = re.sub(r'\[([^\]]+)\]\((https?://[^)]+)\)', r'<a href="\2">\1</a>', text)
+    text = re.sub(r'\[([^\]]+)\]\((https?://[^)]+)\)',
+                  r'<a href="\2">\1</a>', text)
     # ***bold italic***  →  <strong><em>…</em></strong>
     text = re.sub(r'\*\*\*(.+?)\*\*\*', r'<strong><em>\1</em></strong>', text)
     # **bold** or __bold__  →  <strong>
@@ -215,7 +245,7 @@ def _html_cell(block):
     return f"<{tag}>{_inline_markdown(block['text'])}</{tag}>"
 
 
-def generate_html(left_blocks, right_blocks, left_label="Fran\u00e7ais", right_label="Espa\u00f1ol"):
+def generate_html(left_blocks, right_blocks, left_label, right_label, source_lang="fr"):
     """Build a full HTML document with a 2-column table."""
     if len(left_blocks) != len(right_blocks):
         print(
@@ -228,7 +258,8 @@ def generate_html(left_blocks, right_blocks, left_label="Fran\u00e7ais", right_l
     n = max(len(left_blocks), len(right_blocks))
     for i in range(n):
         left_cell = _html_cell(left_blocks[i]) if i < len(left_blocks) else ""
-        right_cell = _html_cell(right_blocks[i]) if i < len(right_blocks) else ""
+        right_cell = _html_cell(right_blocks[i]) if i < len(
+            right_blocks) else ""
         rows_html.append(
             f'    <tr><td class="left">{left_cell}</td><td class="right">{right_cell}</td></tr>'
         )
@@ -237,6 +268,7 @@ def generate_html(left_blocks, right_blocks, left_label="Fran\u00e7ais", right_l
         rows="\n".join(rows_html),
         left_label=left_label,
         right_label=right_label,
+        source_lang=source_lang,
     )
 
 
@@ -268,38 +300,103 @@ def html_to_pdf(html_string, output_path):
 # Step 5: CLI
 # ---------------------------------------------------------------------------
 
-LANG_LABELS = {"fr": "Fran\u00e7ais", "es": "Espa\u00f1ol"}
+# Endonyms for common languages; unknown codes fall back to uppercase code.
+LANG_LABELS = {
+    "ar": "\u0627\u0644\u0639\u0631\u0628\u064a\u0629",
+    "de": "Deutsch",
+    "en": "English",
+    "es": "Espa\u00f1ol",
+    "fr": "Fran\u00e7ais",
+    "hr": "Hrvatski",
+    "it": "Italiano",
+    "ja": "\u65e5\u672c\u8a9e",
+    "ko": "\ud55c\uad6d\uc5b4",
+    "nl": "Nederlands",
+    "pl": "Polski",
+    "pt": "Portugu\u00eas",
+    "ro": "Rom\u00e2n\u0103",
+    "ru": "\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+    "uk": "\u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430",
+    "zh-CN": "\u4e2d\u6587",
+}
+
+
+def lang_label(code):
+    """Return a display label for a language code (endonym or uppercase code)."""
+    return LANG_LABELS.get(code, code.upper())
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert markdown to a 2-column bilingual FR/ES PDF."
+        description="Convert source markdown text to a 2-column bilingual PDF.",
     )
-    parser.add_argument("input", help="Path to the source markdown file")
+    parser.add_argument("input", nargs="?",
+                        help="(required) path to the source markdown file")
+    parser.add_argument(
+        "--list-languages", action="store_true",
+        help="list available languages with endonyms and exit",
+    )
     parser.add_argument(
         "-o", "--output", default=None,
-        help="Output PDF path (default: <input>.pdf)",
+        help="output PDF path (default: <input>.<source>.<target>.pdf)",
     )
     parser.add_argument(
-        "--direction", choices=["fr-es", "es-fr"], default="fr-es",
-        help="Translation direction (default: fr-es)",
+        "--source", default="fr",
+        help="source language code (default: fr)",
+    )
+    parser.add_argument(
+        "--target", default="es",
+        help="target language code (default: es)",
     )
     parser.add_argument(
         "--translation",
-        help="Path to a pre-translated markdown file",
+        help="path to a pre-translated markdown file (default: use google translate)",
     )
     parser.add_argument(
-        "--stub", action="store_true",
-        help="Use stub translations (for development/testing)",
+        "--save-translation", action="store_true",
+        help="save the translated text as <input>.<target>.md (ignored with --translation)",
     )
     parser.add_argument(
         "--html-only", action="store_true",
-        help="Write intermediate HTML instead of PDF (for debugging layout)",
+        help="write intermediate HTML instead of PDF (for debugging layout)",
     )
 
     args = parser.parse_args()
 
-    source_lang, target_lang = args.direction.split("-")
+    # -- list languages and exit --
+    if args.list_languages:
+        for code, label in sorted(LANG_LABELS.items()):
+            print(f"  {code:<6} {label}")
+        print(
+            f"\nOther codes (e.g. 'sv', 'fi') known to Google Translate can also be used.")
+        sys.exit(0)
+
+    # -- validate input file --
+    if not args.input:
+        parser.error("the following argument is required: input")
+    if not args.input.endswith(".md"):
+        parser.error(f"input file must have .md extension: {args.input}")
+    if not os.path.isfile(args.input):
+        parser.error(f"input file not found: {args.input}")
+
+    # -- validate output file --
+    if args.output:
+        expected_ext = ".html" if args.html_only else ".pdf"
+        if not args.output.endswith(expected_ext):
+            parser.error(
+                f"output file must have {expected_ext} extension: {args.output}")
+
+    source_lang = args.source
+    target_lang = args.target
+    left_label = lang_label(source_lang)
+    right_label = lang_label(target_lang)
+
+    # Compute base stem: strip .md, then strip .<source> suffix if present
+    # e.g. "sample.fr.md" with --source fr → stem "sample"
+    #      "sample.md"    with --source fr → stem "sample"
+    stem = re.sub(r"\.md$", "", args.input)
+    if stem.endswith(f".{source_lang}"):
+        stem = stem[: -len(f".{source_lang}")]
 
     # -- read & parse source --
     with open(args.input, encoding="utf-8") as f:
@@ -308,25 +405,34 @@ def main():
     # -- translate --
     if args.translation:
         target_blocks = load_translated_file(args.translation)
-    elif args.stub:
-        target_blocks = translate_stub(source_blocks, target_lang=target_lang)
     else:
-        target_blocks = translate_with_google(source_blocks, source=source_lang, target=target_lang)
+        _validate_lang_codes(source_lang, target_lang)
+        target_blocks = translate_with_google(
+            source_blocks, source=source_lang, target=target_lang)
+
+    # -- save translation if requested --
+    if args.save_translation and not args.translation:
+        trans_path = f"{stem}.{target_lang}.md"
+        with open(trans_path, "w", encoding="utf-8") as f:
+            f.write(blocks_to_markdown(target_blocks))
+        print(f"Translation written to: {trans_path}")
 
     # -- generate HTML --
     html = generate_html(
         source_blocks,
         target_blocks,
-        left_label=LANG_LABELS[source_lang],
-        right_label=LANG_LABELS[target_lang],
+        left_label=left_label,
+        right_label=right_label,
+        source_lang=source_lang,
     )
 
     # -- output --
     if args.output:
         out_path = args.output
     else:
-        out_path = re.sub(r"\.md$", "", args.input) + (
-            ".html" if args.html_only else ".pdf"
+        out_path = (
+            f"{stem}.{source_lang}.{target_lang}.html" if args.html_only
+            else f"{stem}.{source_lang}.{target_lang}.pdf"
         )
 
     if args.html_only:

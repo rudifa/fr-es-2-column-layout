@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: A4;
+    margin: 2cm;
+  }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.4;
+    color: #222;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  td {
+    vertical-align: top;
+    padding: 4pt 8pt;
+    width: 50%;
+  }
+  /* thin vertical separator */
+  td.left {
+    border-right: 0.5pt solid #ccc;
+    padding-right: 12pt;
+  }
+  td.right {
+    padding-left: 12pt;
+  }
+  tr {
+    break-inside: avoid;
+  }
+  h1, h2 {
+    margin: 0;
+  }
+  td h1 {
+    font-size: 16pt;
+    margin-top: 12pt;
+    margin-bottom: 2pt;
+  }
+  td h2 {
+    font-size: 13pt;
+    margin-top: 10pt;
+    margin-bottom: 2pt;
+  }
+  td p {
+    margin: 4pt 0;
+  }
+  /* column headers */
+  thead th {
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    color: #888;
+    border-bottom: 1pt solid #ccc;
+    padding-bottom: 4pt;
+    text-align: left;
+  }
+</style>
+</head>
+<body>
+<table>
+  <thead>
+    <tr><th>Français</th><th>Español</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="left"><h1>La Tour Eiffel</h1></td><td class="right"><h1>La Torre Eiffel</h1></td></tr>
+    <tr><td class="left"><h2>Histoire</h2></td><td class="right"><h2>Historia</h2></td></tr>
+    <tr><td class="left"><p>La tour Eiffel est une tour de fer puddlé de 330 mètres de hauteur située à Paris. Elle a été construite en deux ans par Gustave Eiffel et ses collaborateurs pour l'Exposition universelle de Paris de 1889.</p></td><td class="right"><p>La Torre Eiffel es una torre de hierro encharcado de 330 metros de altura ubicada en París. Fue construido en dos años por Gustave Eiffel y sus colaboradores para la Exposición Universal de París de 1889.</p></td></tr>
+    <tr><td class="left"><p>Initialement critiquée par certains artistes et intellectuels, la tour Eiffel est devenue le symbole de Paris et l'un des monuments les plus visités au monde.</p></td><td class="right"><p>Inicialmente criticada por ciertos artistas e intelectuales, la Torre Eiffel se ha convertido en el símbolo de París y en uno de los monumentos más visitados del mundo.</p></td></tr>
+    <tr><td class="left"><h2>Architecture</h2></td><td class="right"><h2>Arquitectura</h2></td></tr>
+    <tr><td class="left"><p>La tour repose sur quatre piliers massifs qui convergent vers un sommet unique. Sa structure en treillis de fer lui confère à la fois légèreté visuelle et solidité structurelle.</p></td><td class="right"><p>La torre se apoya en cuatro macizos pilares que convergen en una única cima. Su estructura de celosía de hierro le aporta ligereza visual y solidez estructural.</p></td></tr>
+    <tr><td class="left"><p>Trois étages sont accessibles au public. Le premier étage offre une vue panoramique sur la ville, tandis que le sommet permet d'admirer Paris dans toute sa splendeur.</p></td><td class="right"><p>Tres pisos son accesibles al público. El primer piso ofrece una vista panorámica de la ciudad, mientras que la cima permite admirar París en todo su esplendor.</p></td></tr>
+    <tr><td class="left"><h1>Le Louvre</h1></td><td class="right"><h1>El Louvre</h1></td></tr>
+    <tr><td class="left"><h2>Collections</h2></td><td class="right"><h2>Colecciones</h2></td></tr>
+    <tr><td class="left"><p>Le musée du Louvre est le plus grand musée d'art au monde. Ses collections comprennent des oeuvres datant de l'Antiquité jusqu'au milieu du XIXe siècle.</p></td><td class="right"><p>El Museo del Louvre es el museo de arte más grande del mundo. Sus colecciones incluyen obras que datan desde la Antigüedad hasta mediados del siglo XIX.</p></td></tr>
+    <tr><td class="left"><p>Parmi ses pièces les plus célèbres figurent la Joconde de Léonard de Vinci, la Vénus de Milo et la Victoire de Samothrace.</p></td><td class="right"><p>Entre sus piezas más famosas se encuentran la Mona Lisa, la Venus de Milo y la Victoria de Samotracia de Leonardo da Vinci.</p></td></tr>
+  </tbody>
+</table>
+</body>
+</html>
